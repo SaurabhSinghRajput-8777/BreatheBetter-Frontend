@@ -1,0 +1,39 @@
+@import "tailwindcss";
+
+/* GLOBAL LIGHT + DARK BACKGROUND FIX  */
+:root {
+  --bg: #F5F7FA;
+  --card: #ffffff;
+  --text-primary: #1f2937;
+  --text-secondary: #6b7280;
+  --card-border: #E5E7EB; /* This is tailwind gray-200 */
+}
+
+.dark {
+  --bg: #0b1220;
+  --card: #111827;
+  --text-primary: #f3f4f6;
+  --text-secondary: #9ca3af;
+  --card-border: #374151; /* This is tailwind gray-700 */
+}
+
+body {
+  @apply bg-[--bg] transition-colors;
+  color: var(--text-primary);
+}
+
+html, body, #root {
+  height: 100%;
+}
+
+/* SCROLLBAR (OPTIONAL CLEAN STYLE) */
+::-webkit-scrollbar {
+  width: 8px;
+}
+::-webkit-scrollbar-thumb {
+  background: #d1d5db;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #9ca3af;
+}
