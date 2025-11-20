@@ -5,6 +5,7 @@ import "leaflet/dist/leaflet.css";
 import "leaflet.heat";
 import L from "leaflet";
 import { ThemeContext } from "../context/ThemeContext";
+import { DEFAULT_BASE } from "../lib/api";
 
 /* ---------------------------------------------------------------
   CITY CENTERS
@@ -110,7 +111,7 @@ export default function Heatmap() {
       console.log(`[FE Cache] Fetching new data for ${currentCity}…`);
       // NOTE: This is a hardcoded URL, you should update this to use your api.js library
       const res = await fetch(
-        `http://127.0.0.1:8000/spatial_heatmap?city=${currentCity}`
+        `${DEFAULT_BASE}/spatial_heatmap?city=${currentCity}`
       );
       if (!res.ok) throw new Error(`API Error: ${res.status}`);
 

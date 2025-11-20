@@ -1,4 +1,5 @@
 // src/components/RealtimeAQICard.jsx
+import { getLivePollutants } from "../lib/api";
 import React, { useEffect, useState, useContext } from "react";
 import { ThemeContext } from "../context/ThemeContext";
 
@@ -66,8 +67,7 @@ export default function RealtimeAQICard({ city = "Delhi" }) {
 
   const fetchAQI = async () => {
     try {
-      const res = await fetch(`http://127.0.0.1:8000/live_pollutants?city=${city}`);
-      const json = await res.json();
+      const json = await getLivePollutants(city);
       setData(json);
       setLoading(false);
     } catch (err) {
