@@ -78,7 +78,7 @@ export default function RealtimeAQICard({ city = "Delhi" }) {
 
   useEffect(() => {
     fetchAQI();
-    const interval = setInterval(fetchAQI, 30000);
+    const interval = setInterval(fetchAQI, 600000);
     return () => clearInterval(interval);
   }, [city]);
 
