@@ -12,9 +12,9 @@ import {
   Legend,
   Filler,
 } from "chart.js";
-import { getPredict } from "../lib/api";
-import { fetchPredictionsCached } from "../utils/fetchPredictionsCached";
+import { pm25ToAQI, getAQICategory, getAQIColor } from "../utils/aqiUtils";
 import { ThemeContext } from "../context/ThemeContext";
+import { TrendingUp, Sunrise, Shield, LineChart } from "lucide-react";
 
 ChartJS.register(
   CategoryScale,
@@ -27,139 +27,107 @@ ChartJS.register(
   Filler
 );
 
-// 🔥 1. ADDED: The Centralized AQI Formula (Matches Live Cards)
-function pm25ToAQI(pm25) {
-  if (pm25 === null || pm25 === undefined || isNaN(parseFloat(pm25))) return 0;
-  const pm = parseFloat(pm25);
+// AQI conversion and categorization imported from centralized aqiUtils.js
+// Aliases for chart usage
+const getAQICategoryText = getAQICategory;
+const getAQICategoryColor = getAQIColor;
 
-  // Indian CPCB Breakpoints
-  if (pm <= 30) return Math.round((50 / 30) * pm);
-  if (pm <= 60) return Math.round(((100 - 51) / (60 - 30)) * (pm - 30) + 51);
-  if (pm <= 90) return Math.round(((200 - 101) / (90 - 60)) * (pm - 60) + 101);
-  if (pm <= 120) return Math.round(((300 - 201) / (120 - 90)) * (pm - 90) + 201);
-  if (pm <= 250) return Math.round(((400 - 301) / (250 - 120)) * (pm - 120) + 301);
-  if (pm > 250) return Math.round(((500 - 401) / (380 - 250)) * (pm - 250) + 401);
-  
-  return 500;
-}
-
-// 🔥 2. UPDATED: Category Logic based on AQI (not PM2.5)
-function getAQICategoryText(aqi) {
-  if (aqi <= 50) return "Good";
-  if (aqi <= 100) return "Moderate";
-  if (aqi <= 200) return "Poor";
-  if (aqi <= 300) return "Unhealthy";
-  if (aqi <= 400) return "Severe";
-  return "Hazardous";
-}
-
-function getAQICategoryColor(aqi) {
-  if (aqi <= 50) return "#00E400";      // Green
-  if (aqi <= 100) return "#F0D400";     // Yellow
-  if (aqi <= 200) return "#F07554";     // Orange
-  if (aqi <= 300) return "#F54E8E";     // Pink/Red
-  if (aqi <= 400) return "#8F3F97";     // Purple
-  return "#7E0023";                     // Maroon
-}
-
-export default function ForecastCard({ city, hours = 24 }) {
+export default function ForecastCard({ city, hours = 24, predData = null }) {
   const { theme } = useContext(ThemeContext);
   const [chartData, setChartData] = useState(null);
-  const [loading, setLoading] = useState(true);
-  
-  const [peakInfo, setPeakInfo] = useState({ value: 0, time: "--", color: "#ccc", category: "" });
-  
+  const loading = !predData;
+
+  const [insights, setInsights] = useState(null);
+
   const chartRef = useRef(null);
 
+  const TEXT_COLORS = {
+    Good: "text-green-600 dark:text-green-400",
+    Satisfactory: "text-lime-600 dark:text-lime-400",
+    Moderate: "text-yellow-600 dark:text-yellow-400",
+    Poor: "text-orange-600 dark:text-orange-500",
+    "Very Poor": "text-red-600 dark:text-red-500",
+    Severe: "text-purple-600 dark:text-purple-400",
+  };
+
+  // Process prediction data into chart format
+  const processPredictions = (data) => {
+    if (!data?.predictions?.length) return;
+
+    const labels = data.predictions.map((p) => {
+      const dt = new Date(p.datetime);
+      return dt.toLocaleTimeString("en-US", { hour: "numeric", hour12: true });
+    });
+
+    const values = data.predictions.map((p) => pm25ToAQI(p.pm25));
+
+    const maxValue = Math.max(...values);
+    const maxIndex = values.indexOf(maxValue);
+    const maxTime = labels[maxIndex];
+    const maxCat = getAQICategoryText(maxValue);
+
+    const minValue = Math.min(...values);
+    const minIndex = values.indexOf(minValue);
+    const minTime = labels[minIndex];
+
+    setInsights({
+      peakValue: Math.round(maxValue),
+      peakTime: maxTime,
+      peakColorClass: TEXT_COLORS[maxCat] || "text-gray-500",
+      bestValue: Math.round(minValue),
+      bestTime: minTime,
+      maskReq: maxValue > 100
+    });
+
+    setChartData({
+      labels: labels,
+      datasets: [
+        {
+          label: "Forecast AQI",
+          data: values,
+          fill: true,
+          tension: 0.4,
+          borderWidth: 3,
+          pointRadius: 0,
+          pointHoverRadius: 6,
+          pointBackgroundColor: theme === "dark" ? "#1f2937" : "#ffffff",
+          pointBorderWidth: 2,
+
+          borderColor: (context) => {
+            const chart = context.chart;
+            const { ctx, chartArea } = chart;
+            if (!chartArea) return "#6366f1";
+
+            const gradient = ctx.createLinearGradient(0, chartArea.bottom, 0, chartArea.top);
+            gradient.addColorStop(0, "#00E400");   // Good
+            gradient.addColorStop(0.2, "#F0D400"); // Satisfactory
+            gradient.addColorStop(0.4, "#F07554"); // Moderate
+            gradient.addColorStop(0.6, "#F54E8E"); // Poor
+            gradient.addColorStop(0.8, "#8F3F97"); // Very Poor
+            gradient.addColorStop(1, "#7E0023");   // Severe
+            return gradient;
+          },
+
+          backgroundColor: (context) => {
+            const chart = context.chart;
+            const { ctx, chartArea } = chart;
+            if (!chartArea) return "rgba(99, 102, 241, 0.2)";
+
+            const gradient = ctx.createLinearGradient(0, chartArea.bottom, 0, chartArea.top);
+            gradient.addColorStop(0, "rgba(0, 228, 0, 0.1)");
+            gradient.addColorStop(1, "rgba(245, 78, 142, 0.4)");
+            return gradient;
+          },
+        },
+      ],
+    });
+  };
+
   useEffect(() => {
-    const fetchPrediction = async () => {
-      setLoading(true);
-      try {
-        const data = await fetchPredictionsCached(city, () => getPredict(city, hours));
-        
-        if (data?.predictions?.length > 0) {
-          
-          // 1. Labels (Time)
-          const labels = data.predictions.map((p) => {
-            const dt = new Date(p.datetime);
-            return dt.toLocaleTimeString("en-US", {
-              hour: "numeric",
-              hour12: true,
-            });
-          });
-          
-          // 🔥 3. UPDATED: Convert PM2.5 -> AQI for the chart
-          const values = data.predictions.map((p) => pm25ToAQI(p.pm25));
-
-          // 3. Find Peak AQI
-          const maxValue = Math.max(...values);
-          const maxIndex = values.indexOf(maxValue);
-          const maxTime = labels[maxIndex];
-          const maxColor = getAQICategoryColor(maxValue);
-          const maxCat = getAQICategoryText(maxValue);
-
-          setPeakInfo({
-            value: Math.round(maxValue),
-            time: maxTime,
-            color: maxColor,
-            category: maxCat
-          });
-
-          setChartData({
-            labels: labels,
-            datasets: [
-              {
-                label: "Forecast AQI",
-                data: values,
-                fill: true,
-                tension: 0.4,
-                borderWidth: 3,
-                pointRadius: 0,
-                pointHoverRadius: 6,
-                pointBackgroundColor: theme === "dark" ? "#1f2937" : "#ffffff",
-                pointBorderWidth: 2,
-                
-                // Gradient Stroke based on AQI Severity colors
-                borderColor: (context) => {
-                  const chart = context.chart;
-                  const { ctx, chartArea } = chart;
-                  if (!chartArea) return "#6366f1";
-                  
-                  const gradient = ctx.createLinearGradient(0, chartArea.bottom, 0, chartArea.top);
-                  // Colors mapped roughly to AQI scale height (0 to 500)
-                  gradient.addColorStop(0, "#00E400");   // Good
-                  gradient.addColorStop(0.2, "#F0D400"); // Moderate
-                  gradient.addColorStop(0.4, "#F07554"); // Poor
-                  gradient.addColorStop(0.6, "#F54E8E"); // Unhealthy
-                  gradient.addColorStop(0.8, "#8F3F97"); // Severe
-                  gradient.addColorStop(1, "#7E0023");   // Hazardous
-                  return gradient;
-                },
-
-                backgroundColor: (context) => {
-                  const chart = context.chart;
-                  const { ctx, chartArea } = chart;
-                  if (!chartArea) return "rgba(99, 102, 241, 0.2)";
-                  
-                  const gradient = ctx.createLinearGradient(0, chartArea.bottom, 0, chartArea.top);
-                  gradient.addColorStop(0, "rgba(0, 228, 0, 0.1)"); 
-                  gradient.addColorStop(1, "rgba(245, 78, 142, 0.4)");   
-                  return gradient;
-                },
-              },
-            ],
-          });
-        }
-      } catch (err) {
-        console.error("Forecast fetch error:", err);
-      }
-      setLoading(false);
-    };
-
-    if (city) {
-      fetchPrediction();
+    if (predData) {
+      processPredictions(predData);
     }
-  }, [city, hours, theme]); 
+  }, [predData, theme]);
 
   const options = useMemo(() => ({
     responsive: true,
@@ -180,11 +148,10 @@ export default function ForecastCard({ city, hours = 24 }) {
         displayColors: false,
         callbacks: {
           title: (tooltipItems) => `Time: ${tooltipItems[0].label}`,
-          // 🔥 4. UPDATED Tooltip Label
           label: (context) => `AQI: ${context.parsed.y}`,
           afterLabel: (context) => {
             const val = context.parsed.y;
-            const cat = getAQICategoryText(val); 
+            const cat = getAQICategoryText(val);
             return `Status: ${cat}`;
           }
         },
@@ -200,46 +167,60 @@ export default function ForecastCard({ city, hours = 24 }) {
         grid: { color: theme === "dark" ? "rgba(255, 255, 255, 0.05)" : "rgba(0, 0, 0, 0.05)", borderDash: [5, 5] },
         ticks: { color: theme === "dark" ? "#64748b" : "#9ca3af", font: { size: 10 } },
         border: { display: false },
-        // Optional: Set min/max to keep chart stable if needed, or let it float
         min: 0,
       },
     },
   }), [theme, chartData]);
 
-  // Loading Skeleton (Unchanged)
   if (loading) {
     return (
-      <div className="max-w-[1200px] mx-auto mt-6 px-4 md:px-6 mb-10 relative z-10">
-        <div className="h-[380px] rounded-3xl bg-[var(--card)] border border-[var(--card-border)] shadow-md p-6 md:p-8 relative overflow-hidden">
-          <div className="absolute inset-0 -translate-x-full animate-[shimmer_1.5s_infinite] bg-gradient-to-r from-transparent via-white/10 dark:via-white/5 to-transparent z-20"></div>
-          <div className="flex justify-between items-start mb-8">
-            <div className="space-y-3">
-              <div className="h-6 w-40 bg-gray-200 dark:bg-gray-700 rounded-md"></div>
-              <div className="h-4 w-64 bg-gray-100 dark:bg-gray-800 rounded-md"></div>
-            </div>
-            <div className="hidden md:block">
-               <div className="h-10 w-32 bg-gray-100 dark:bg-gray-800 rounded-lg"></div>
+      <div className="max-w-7xl mx-auto mt-6 px-4 md:px-6 mb-10 relative z-10">
+        <div className="rounded-2xl shadow-lg bg-[var(--card)] dark:bg-white/[0.04] backdrop-blur-md border border-[var(--card-border)] dark:border-white/[0.06] transition-all duration-300 overflow-hidden">
+          
+          <div className="flex items-center gap-4 bg-lime-50 dark:bg-lime-500/10 p-6 border-b border-lime-200 dark:border-lime-500/20">
+            <div className="w-12 h-12 rounded-xl bg-gray-200 dark:bg-gray-700/50 animate-pulse shrink-0"></div>
+            <div className="space-y-2">
+               <div className="h-6 w-48 bg-gray-200 dark:bg-gray-700/50 rounded animate-pulse"></div>
+               <div className="h-4 w-64 bg-gray-200 dark:bg-gray-700/50 rounded animate-pulse"></div>
             </div>
           </div>
-          <div className="relative h-[250px] w-full bg-gray-50 dark:bg-gray-800/30 rounded-xl overflow-hidden flex items-end pb-4 px-4 gap-4">
-             <div className="w-full h-[40%] bg-gray-200 dark:bg-gray-700/50 rounded-t-sm"></div>
-             <div className="w-full h-[60%] bg-gray-200 dark:bg-gray-700/50 rounded-t-sm"></div>
-             <div className="w-full h-[30%] bg-gray-200 dark:bg-gray-700/50 rounded-t-sm"></div>
-             <div className="w-full h-[80%] bg-gray-200 dark:bg-gray-700/50 rounded-t-sm"></div>
-             <div className="w-full h-[50%] bg-gray-200 dark:bg-gray-700/50 rounded-t-sm"></div>
-             <div className="w-full h-[70%] bg-gray-200 dark:bg-gray-700/50 rounded-t-sm"></div>
-             <div className="w-full h-[45%] bg-gray-200 dark:bg-gray-700/50 rounded-t-sm"></div>
+
+          <div className="p-4 md:p-6 mb-0 space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="h-[88px] rounded-xl bg-[var(--card)] dark:bg-white/5 border border-[var(--card-border)] dark:border-white/10 animate-pulse"></div>
+              <div className="h-[88px] rounded-xl bg-[var(--card)] dark:bg-white/5 border border-[var(--card-border)] dark:border-white/10 animate-pulse"></div>
+              <div className="h-[88px] rounded-xl bg-[var(--card)] dark:bg-white/5 border border-[var(--card-border)] dark:border-white/10 animate-pulse"></div>
+            </div>
+            
+            <div className="relative h-[300px] w-full flex items-end pb-8 px-4 gap-2 border-b border-l border-gray-100 dark:border-gray-800">
+               <div className="w-full h-[40%] bg-gray-200 dark:bg-gray-700/30 rounded-t-sm animate-pulse"></div>
+               <div className="w-full h-[60%] bg-gray-200 dark:bg-gray-700/30 rounded-t-sm animate-pulse"></div>
+               <div className="w-full h-[30%] bg-gray-200 dark:bg-gray-700/30 rounded-t-sm animate-pulse"></div>
+               <div className="w-full h-[80%] bg-gray-200 dark:bg-gray-700/30 rounded-t-sm animate-pulse"></div>
+               <div className="w-full h-[50%] bg-gray-200 dark:bg-gray-700/30 rounded-t-sm animate-pulse"></div>
+               <div className="w-full h-[70%] bg-gray-200 dark:bg-gray-700/30 rounded-t-sm animate-pulse"></div>
+               <div className="w-full h-[45%] bg-gray-200 dark:bg-gray-700/30 rounded-t-sm animate-pulse"></div>
+               <div className="w-full h-[85%] bg-gray-200 dark:bg-gray-700/30 rounded-t-sm animate-pulse"></div>
+               <div className="w-full h-[65%] bg-gray-200 dark:bg-gray-700/30 rounded-t-sm animate-pulse"></div>
+               <div className="w-full h-[35%] bg-gray-200 dark:bg-gray-700/30 rounded-t-sm animate-pulse"></div>
+               <div className="w-full h-[55%] bg-gray-200 dark:bg-gray-700/30 rounded-t-sm animate-pulse"></div>
+               <div className="w-full h-[75%] bg-gray-200 dark:bg-gray-700/30 rounded-t-sm animate-pulse"></div>
+            </div>
           </div>
+
         </div>
       </div>
     );
   }
 
   return (
-    <div className="max-w-[1200px] mx-auto mt-6 px-4 md:px-6 mb-10 relative z-10">
-      <div className="rounded-3xl p-6 md:p-8 shadow-lg bg-[var(--card)] border border-[var(--card-border)] transition-all duration-300">
-        
-        <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-4">
+    <div className="max-w-7xl mx-auto mt-6 px-4 md:px-6 mb-10 relative z-10">
+      <div className="rounded-2xl shadow-lg bg-[var(--card)] dark:bg-white/[0.04] backdrop-blur-md border border-[var(--card-border)] dark:border-white/[0.06] transition-all duration-300 overflow-hidden">
+
+        <div className="flex items-center gap-4 bg-lime-50 dark:bg-lime-500/10 p-6 border-b border-lime-200 dark:border-lime-500/20">
+          <div className="p-3 rounded-xl bg-white dark:bg-black/20 shadow-sm text-lime-600 dark:text-lime-400">
+            <LineChart className="w-7 h-7" />
+          </div>
           <div>
             <h2 className="text-xl font-bold text-primary tracking-tight flex items-center gap-2">
               Hourly AQI Forecast
@@ -251,24 +232,48 @@ export default function ForecastCard({ city, hours = 24 }) {
               Predicting next <span className="text-primary font-semibold">{hours} hours</span> of Air Quality Index
             </p>
           </div>
+        </div>
 
-          {peakInfo.value > 0 && (
-            <div className="flex items-center gap-3 pl-4 border-l-2 border-gray-100 dark:border-gray-800">
-              <div className="text-right">
-                <p className="text-[15px] uppercase tracking-wider font-bold text-secondary">
-                  Expected Peak AQI
-                </p>
-                <div className="flex items-center justify-end gap-2">
-                    <span className="w-2.5 h-2.5 rounded-full shadow-sm" style={{ backgroundColor: peakInfo.color }}></span>
-                    <p className="text-m font-bold text-primary">
-                        {/* 🔥 5. UPDATED Unit to 'AQI' */}
-                        {peakInfo.value} <span className="text-sm font-normal text-secondary">AQI</span>
-                    </p>
-                    <span className="text-sm text-secondary font-bold">
-                        at {peakInfo.time}
-                    </span>
+        <div className="flex flex-col mb-8 gap-6 p-4 md:p-6 mb-0">
+          {insights && (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+
+              <div className="flex items-center gap-4 p-4 rounded-xl bg-[var(--card)] dark:bg-white/5 border border-[var(--card-border)] dark:border-white/10 shadow-sm transition-shadow hover:shadow-md">
+                <div className={`p-3 rounded-lg bg-white dark:bg-black/20 shadow-sm ${insights.peakColorClass}`}>
+                  <TrendingUp className="w-6 h-6" />
+                </div>
+                <div>
+                  <p className="text-xs font-bold text-secondary uppercase tracking-wider mb-1">Expected Peak AQI</p>
+                  <p className="text-lg font-bold text-primary">
+                    <span className={insights.peakColorClass}>{insights.peakValue}</span> <span className="text-sm font-normal text-secondary">at {insights.peakTime}</span>
+                  </p>
                 </div>
               </div>
+
+              <div className="flex items-center gap-4 p-4 rounded-xl bg-[var(--card)] dark:bg-white/5 border border-[var(--card-border)] dark:border-white/10 shadow-sm transition-shadow hover:shadow-md">
+                <div className="p-3 rounded-lg bg-white dark:bg-black/20 shadow-sm text-emerald-500">
+                  <Sunrise className="w-6 h-6" />
+                </div>
+                <div>
+                  <p className="text-xs font-bold text-secondary uppercase tracking-wider mb-1">Best Time Outside</p>
+                  <p className="text-lg font-bold text-primary">
+                    {insights.bestTime} <span className="text-sm font-normal text-secondary">({insights.bestValue} AQI)</span>
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-4 p-4 rounded-xl bg-[var(--card)] dark:bg-white/5 border border-[var(--card-border)] dark:border-white/10 shadow-sm transition-shadow hover:shadow-md">
+                <div className={`p-3 rounded-lg bg-white dark:bg-black/20 shadow-sm ${insights.maskReq ? "text-amber-500" : "text-emerald-500"}`}>
+                  <Shield className="w-6 h-6" />
+                </div>
+                <div>
+                  <p className="text-xs font-bold text-secondary uppercase tracking-wider mb-1">Mask Recommended</p>
+                  <p className={`text-lg font-bold ${insights.maskReq ? "text-amber-600 dark:text-amber-400" : "text-emerald-600 dark:text-emerald-400"}`}>
+                    {insights.maskReq ? "YES" : "NO"}
+                  </p>
+                </div>
+              </div>
+
             </div>
           )}
         </div>
@@ -278,7 +283,7 @@ export default function ForecastCard({ city, hours = 24 }) {
             <Line ref={chartRef} data={chartData} options={options} />
           ) : (
             <div className="flex h-full items-center justify-center text-secondary">
-               No forecast data available.
+              No forecast data available.
             </div>
           )}
         </div>

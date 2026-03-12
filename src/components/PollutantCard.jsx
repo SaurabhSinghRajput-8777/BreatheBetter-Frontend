@@ -3,11 +3,11 @@ import React from "react";
 
 const POLLUTANT_CONFIG = {
   "PM2.5": { color: "text-rose-500", bg: "bg-rose-500", border: "group-hover:border-rose-500/50", hex: "#f43f5e", max: 250 },
-  "PM10":  { color: "text-orange-500", bg: "bg-orange-500", border: "group-hover:border-orange-500/50", hex: "#f97316", max: 300 },
-  "NO2":   { color: "text-yellow-500", bg: "bg-yellow-500", border: "group-hover:border-yellow-500/50", hex: "#eab308", max: 200 },
-  "SO2":   { color: "text-indigo-500", bg: "bg-indigo-500", border: "group-hover:border-indigo-500/50", hex: "#6366f1", max: 200 },
-  "O3":    { color: "text-cyan-500", bg: "bg-cyan-500", border: "group-hover:border-cyan-500/50", hex: "#06b6d4", max: 180 },
-  "CO":    { color: "text-emerald-500", bg: "bg-emerald-500", border: "group-hover:border-emerald-500/50", hex: "#10b981", max: 10000 },
+  "PM10": { color: "text-orange-500", bg: "bg-orange-500", border: "group-hover:border-orange-500/50", hex: "#f97316", max: 300 },
+  "NO2": { color: "text-yellow-500", bg: "bg-yellow-500", border: "group-hover:border-yellow-500/50", hex: "#eab308", max: 200 },
+  "SO2": { color: "text-indigo-500", bg: "bg-indigo-500", border: "group-hover:border-indigo-500/50", hex: "#6366f1", max: 200 },
+  "O3": { color: "text-cyan-500", bg: "bg-cyan-500", border: "group-hover:border-cyan-500/50", hex: "#06b6d4", max: 180 },
+  "CO": { color: "text-emerald-500", bg: "bg-emerald-500", border: "group-hover:border-emerald-500/50", hex: "#10b981", max: 10000 },
   "default": { color: "text-gray-500", bg: "bg-gray-500", border: "group-hover:border-gray-500/50", hex: "#6b7280", max: 100 },
 };
 
@@ -22,7 +22,7 @@ const ChemicalName = ({ name }) => {
 };
 
 export default function PollutantCard({ name, value, unit = "µg/m³", loading = false }) {
-  const key = name.trim(); 
+  const key = name.trim();
   const config = POLLUTANT_CONFIG[key] || POLLUTANT_CONFIG.default;
 
   const numericValue = parseFloat(value) || 0;
@@ -30,13 +30,36 @@ export default function PollutantCard({ name, value, unit = "µg/m³", loading =
 
   if (loading) {
     return (
-      <div className="h-36 rounded-3xl bg-[var(--card)] border border-[var(--card-border)] shadow-sm animate-pulse p-5 relative overflow-hidden">
-        <div className="h-full w-full absolute top-0 left-0 bg-gradient-to-r from-transparent via-gray-100/5 dark:via-white/5 to-transparent translate-x-[-100%] animate-[shimmer_1.5s_infinite]"></div>
-        <div className="flex justify-between items-center mb-6">
-           <div className="h-8 w-16 bg-gray-200 dark:bg-gray-700/50 rounded-xl"></div>
-           <div className="h-8 w-8 rounded-full bg-gray-200 dark:bg-gray-700/50"></div>
+      <div
+        className="
+          relative flex! flex-col! justify-between h-full
+          rounded-2xl p-4 md:p-6! 
+          bg-[var(--card)] dark:bg-white/[0.04]
+          backdrop-blur-md
+          border! border-[var(--card-border)] dark:border-white/[0.06]
+          shadow-sm overflow-hidden! min-h-[144px]
+        "
+      >
+        {/* Top Row: Chemical Badge Skeleton */}
+        <div className="flex justify-between items-start mb-2 md:mb-3 z-10 w-full">
+          <div className="h-7 w-16 bg-gray-200 dark:bg-gray-700/50 rounded-xl animate-pulse"></div>
+          <div className="h-3 w-12 bg-gray-200 dark:bg-gray-700/50 rounded animate-pulse mt-1"></div>
         </div>
-        <div className="h-10 w-24 bg-gray-200 dark:bg-gray-700/50 rounded mb-2"></div>
+
+        {/* Middle Row: Big Value Skeleton */}
+        <div className="flex items-baseline justify-center gap-1.5 z-10 my-2 md:my-4">
+          <div className="h-10 w-24 bg-gray-200 dark:bg-gray-700/50 rounded animate-pulse"></div>
+          <div className="h-4 w-8 bg-gray-200 dark:bg-gray-700/50 rounded animate-pulse"></div>
+        </div>
+
+        {/* Bottom Row: Enhanced Progress Bar Skeleton */}
+        <div className="relative z-10 w-full mt-auto">
+          <div className="flex justify-between mb-1 md:mb-1.5 opacity-80">
+            <div className="h-2 w-16 bg-gray-200 dark:bg-gray-700/50 rounded animate-pulse"></div>
+            <div className="h-2 w-6 bg-gray-200 dark:bg-gray-700/50 rounded animate-pulse"></div>
+          </div>
+          <div className="w-full h-2 bg-gray-200 dark:bg-gray-700/50 rounded-full overflow-hidden animate-pulse"></div>
+        </div>
       </div>
     );
   }
@@ -44,12 +67,13 @@ export default function PollutantCard({ name, value, unit = "µg/m³", loading =
   return (
     <div
       className="
-        relative flex flex-col justify-between
-        rounded-3xl p-5 
-        bg-[var(--card)] 
-        border border-[var(--card-border)]
+        relative flex! flex-col! justify-between h-full
+        rounded-2xl p-4 md:p-6! 
+        bg-[var(--card)] dark:bg-white/[0.04]
+        backdrop-blur-md
+        border! border-[var(--card-border)] dark:border-white/[0.06]
         shadow-sm transition-all duration-300
-        overflow-hidden
+        overflow-hidden!
       "
       style={{
         // Uniform Gray Gradient for all cards
@@ -57,22 +81,22 @@ export default function PollutantCard({ name, value, unit = "µg/m³", loading =
       }}
     >
       {/* 1. Ambient Glow Spot (Specific color preserved) */}
-      <div 
+      <div
         className="absolute -top-12 -left-12 w-32 h-32 rounded-full blur-3xl opacity-0"
         style={{ backgroundColor: config.hex }}
       />
-      
+
       {/* Top Row: Chemical Badge */}
-      <div className="flex justify-between items-start mb-3 z-10">
+      <div className="flex justify-between items-start mb-2 md:mb-3 z-10">
         <div className="
           px-3 py-1.5 rounded-xl text-sm font-bold 
           backdrop-blur-md shadow-sm border border-white/10
           flex items-center gap-1
         "
-        style={{ 
-          backgroundColor: `${config.hex}15`, 
-          color: config.hex 
-        }}>
+          style={{
+            backgroundColor: `${config.hex}15`,
+            color: config.hex
+          }}>
           <ChemicalName name={name} />
         </div>
 
@@ -84,7 +108,7 @@ export default function PollutantCard({ name, value, unit = "µg/m³", loading =
 
       {/* Middle Row: Big Value (Centered) */}
       {/* 🔥 FIX: Added 'justify-center' here */}
-      <div className="flex items-baseline justify-center gap-1.5 z-10 mb-4">
+      <div className="flex items-baseline justify-center gap-1.5 z-10 my-2 md:my-4">
         <span className="text-4xl font-extrabold text-primary tracking-tight opacity-95">
           {value ?? "--"}
         </span>
@@ -95,22 +119,22 @@ export default function PollutantCard({ name, value, unit = "µg/m³", loading =
 
       {/* Bottom Row: Enhanced Progress Bar */}
       <div className="relative z-10">
-        <div className="flex justify-between text-[10px] font-semibold text-secondary mb-1.5 opacity-80">
+        <div className="flex justify-between text-[10px] font-semibold text-secondary mb-1 md:mb-1.5 opacity-80">
           <span>Concentration</span>
           <span>{Math.round(percentage)}%</span>
         </div>
-        
+
         {/* 🔥 THE FIX: Use standard light/dark background classes */}
-        <div className="w-full h-2 bg-gray-700 dark:bg-gray-400 rounded-full overflow-hidden ring-1 ring-black/5 dark:ring-white/5">
-          <div 
+        <div className="w-full h-2 bg-gray-700 dark:bg-gray-400 rounded-full overflow-hidden ring-1 ring-black/5 dark:ring-white/5">
+          <div
             // Bar color relies on inline style (config.hex) to be dynamic
-            className={`h-full rounded-full transition-all duration-1000 ease-out relative`}
-            style={{ 
-              width: `${percentage}%`,
-              boxShadow: `0 0 10px ${config.hex}`,
+            className={`h-full rounded-full transition-all duration-1000 ease-out relative`}
+            style={{
+              width: `${percentage}%`,
+              boxShadow: `0 0 10px ${config.hex}`,
               backgroundColor: config.hex,
-            }}
-          >
+            }}
+          >
             {/* Shimmer effect on the bar */}
             <div className="absolute top-0 left-0 bottom-0 right-0 bg-gradient-to-r from-transparent via-white/30 to-transparent w-full -translate-x-full animate-[shimmer_2s_infinite]"></div>
           </div>

@@ -6,6 +6,7 @@ import "leaflet.heat";
 import L from "leaflet";
 import { ThemeContext } from "../context/ThemeContext";
 import { DEFAULT_BASE } from "../lib/api";
+import { pm25ToAQI, getAQICategory, getAQIColor } from "../utils/aqiUtils";
 
 /* ---------------------------------------------------------------
   CITY CENTERS
@@ -20,51 +21,20 @@ const CITY_CENTERS = {
 };
 const DEFAULT_ZOOM = 11;
 
-/* ---------------------------------------------------------------
-  AQI COLOR CATEGORIES (INDIAN STANDARD)
----------------------------------------------------------------- */
-const AQI_COLORS = {
-  good: "#00E400",       // Deep Green
-  moderate: "#F0D400",   // Yellow
-  poor: "#F07554",       // Orange
-  unhealthy: "#F54E8E",
-  severe: "#8F3F97",     // Maroon
-  hazardous: "#7E0023"
-};
-
-// 🔥 NEW: Indian Standard PM2.5 -> AQI Conversion
-function pm25ToAQI(pm25) {
-  if (pm25 === null || pm25 === undefined || isNaN(parseFloat(pm25))) return 0;
-  const pm = parseFloat(pm25);
-  
-  if (pm <= 30) return Math.round((50 / 30) * pm);
-  if (pm <= 60) return Math.round(((100 - 51) / (60 - 30)) * (pm - 30) + 51);
-  if (pm <= 90) return Math.round(((200 - 101) / (90 - 60)) * (pm - 60) + 101);
-  if (pm <= 120) return Math.round(((300 - 201) / (120 - 90)) * (pm - 90) + 201);
-  if (pm <= 250) return Math.round(((400 - 301) / (250 - 120)) * (pm - 120) + 301);
-  if (pm > 250) return Math.round(((500 - 401) / (380 - 250)) * (pm - 250) + 401);
-  
-  return 500;
-}
+// AQI conversion and categorization imported from centralized aqiUtils.js
 
 function getAqiSize(aqi) {
-  // Updated thresholds based on AQI scale (0-500)
-  if (aqi <= 50) return 32;     
-  if (aqi <= 100) return 38;    
-  if (aqi <= 200) return 44;    
-  if (aqi <= 300) return 50;    
-  if (aqi <= 400) return 56;    
-  return 64;                    
+  if (aqi <= 50) return 32;
+  if (aqi <= 100) return 38;
+  if (aqi <= 200) return 44;
+  if (aqi <= 300) return 50;
+  if (aqi <= 400) return 56;
+  return 64;
 }
 
 function getAqiCategory(aqi) {
-  // Updated categories based on Indian AQI
-  if (aqi <= 50) return ["Good", AQI_COLORS.good];
-  if (aqi <= 100) return ["Moderate", AQI_COLORS.moderate];
-  if (aqi <= 200) return ["Poor", AQI_COLORS.poor];
-  if (aqi <= 300) return ["Unhealthy", AQI_COLORS.unhealthy];
-  if (aqi <= 400) return ["Severe", AQI_COLORS.severe];
-  return ["Hazardous", AQI_COLORS.hazardous];
+  // Returns [category, color] for heatmap bubbles
+  return [getAQICategory(aqi), getAQIColor(aqi)];
 }
 
 /* ---------------------------------------------------------------
@@ -164,7 +134,7 @@ export default function Heatmap() {
     ? "dark"
     : "light";
 
-    // pick evenly distributed bubble markers
+  // pick evenly distributed bubble markers
   function pickEvenly(points, count = 20) {
     if (points.length <= count) return points;
     const step = Math.floor(points.length / count);
@@ -180,11 +150,10 @@ export default function Heatmap() {
   return (
     <div
       ref={wrapperRef}
-      className={`relative w-full transition-all duration-300 ${
-        isExpanded ? "z-1200" : "z-10"
-      }`}
+      className={`relative w-full transition-all duration-300 ${isExpanded ? "z-[1200] fixed inset-0" : "z-10 h-[220px] sm:h-[280px] md:h-[250px] lg:h-[250px] xl:h-[250px]"
+        }`}
       style={{
-        height: isExpanded ? "100vh" : "40vh",
+        height: isExpanded ? "100vh" : undefined,
         borderRadius: "0px",
 
         overflow: "hidden",
@@ -207,16 +176,15 @@ export default function Heatmap() {
       </button>
 
       <div
-        className={`transition-all duration-300 ${
-          isExpanded ? "fixed inset-0" : "relative w-full h-full"
-        }`}
+        className={`transition-all duration-300 ${isExpanded ? "fixed inset-0" : "relative w-full h-full md:rounded-2xl overflow-hidden"
+          }`}
         style={
           isExpanded
             ? {
-                top: topOffset,
-                height: `calc(100vh - ${topOffset}px)`,
-                background: "var(--bg)", 
-              }
+              top: topOffset,
+              height: `calc(100vh - ${topOffset}px)`,
+              background: "var(--bg)",
+            }
             : {}
         }
       >
@@ -227,14 +195,8 @@ export default function Heatmap() {
           ref={mapRef}
           style={{ width: "100%", height: "100%" }}
         >
-          {/* Light & Dark Tile Layers */}
-          {theme === "dark" ? (
-            <TileLayer url="https://tiles.stadiamaps.com/tiles/alidade_smooth_dark/{z}/{x}/{y}.png" />
-          ) : (
-            <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-          )}
-
-          
+          {/* Force Light Map Tiles to retain Heatmap visual integrity */}
+          <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
 
           {/* 🔥 AQI BUBBLE MARKERS (20 evenly spaced) */}
           {!loadingMap && bubblePoints.map((p, i) => <AQIMarker key={i} point={p} />)}

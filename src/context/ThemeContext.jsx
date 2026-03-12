@@ -3,17 +3,31 @@ import { createContext, useContext, useEffect, useState } from "react";
 export const ThemeContext = createContext(null);
 
 export function ThemeProvider({ children }) {
-  const [theme, setTheme] = useState(
-    localStorage.getItem("theme") || "light"
-  );
+  const [theme, setTheme] = useState(() => {
+    // 1. Check localStorage first (user's explicit choice)
+    const stored = localStorage.getItem("theme");
+    if (stored === "dark" || stored === "light") return stored;
+    // 2. Fall back to system preference
+    if (window.matchMedia?.("(prefers-color-scheme: dark)").matches) return "dark";
+    return "light";
+  });
 
   const [city, setCity] = useState(
     localStorage.getItem("city") || "Delhi"
   );
 
-  // Apply theme to <html>
+  // Apply theme to <html> — explicit add/remove to guarantee state
   useEffect(() => {
-    document.documentElement.classList.toggle("dark", theme === "dark");
+    const root = document.documentElement;
+    if (theme === "dark") {
+      root.classList.add("dark");
+      root.classList.remove("light");
+      root.style.colorScheme = "dark";
+    } else {
+      root.classList.remove("dark");
+      root.classList.add("light");
+      root.style.colorScheme = "light";
+    }
     localStorage.setItem("theme", theme);
   }, [theme]);
 

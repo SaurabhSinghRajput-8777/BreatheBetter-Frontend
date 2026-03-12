@@ -1,30 +1,10 @@
 import React, { useState, useMemo, useEffect, useContext, useRef, useLayoutEffect } from "react";
 import { ThemeContext } from "../context/ThemeContext.jsx";
-import MainPredictionCardSkeleton from "./MainPredictionCard.Skeleton"; // <-- 1. IMPORT SKELETON
-import MaskMan from "../assets/MaskMan.png" 
-function pm25ToAQI(pm25) {
-  if (pm25 === null || pm25 === undefined || isNaN(parseFloat(pm25))) return 0;
-  const pm = parseFloat(pm25);
-  // Indian CPCB Breakpoints (PM2.5 to AQI)
-  if (pm <= 30) return Math.round((50 / 30) * pm);
-  if (pm <= 60) return Math.round(((100 - 51) / (60 - 30)) * (pm - 30) + 51);
-  if (pm <= 90) return Math.round(((200 - 101) / (90 - 60)) * (pm - 60) + 101);
-  if (pm <= 120) return Math.round(((300 - 201) / (120 - 90)) * (pm - 90) + 201);
-  if (pm <= 250) return Math.round(((400 - 301) / (250 - 120)) * (pm - 120) + 301);
-  if (pm > 250) return Math.round(((500 - 401) / (380 - 250)) * (pm - 250) + 401);
-  
-  return 500;
-}
-
-function getAQICategory(aqi) {
-  if (aqi === null || aqi === "...") return "Loading...";
-  if (aqi <= 50) return "Good";
-  if (aqi <= 100) return "Moderate";
-  if (aqi <= 200) return "Poor";
-  if (aqi <= 300) return "Unhealthy";
-  if (aqi <= 400) return "Severe";
-  return "Hazardous";
-}
+import MainPredictionCardSkeleton from "./MainPredictionCard.Skeleton";
+import { pm25ToAQI, getAQICategory } from "../utils/aqiUtils";
+import MaskMan from "../assets/MaskMan.png"
+// AQI conversion and categorization imported from centralized aqiUtils.js
+// Do NOT add local pm25ToAQI or getAQICategory here.
 
 function getAQIColorStyles(aqi, theme = "light") {
   // ... (This entire function is unchanged)
@@ -137,14 +117,14 @@ function getAQIColorStyles(aqi, theme = "light") {
 // <-- 2. NEW MEMOIZED COMPONENT FOR THE SCALE BAR
 const AqiScaleBar = React.memo(function AqiScaleBar({ scaleColors, labelColor }) {
   return (
-    <div className="mt-6" style={{ color: labelColor }}>
-      <div className="flex justify-between text-xs font-medium px-1">
+    <div className="mt-6 w-full overflow-hidden" style={{ color: labelColor }}>
+      <div className="flex justify-between text-[10px] md:text-xs font-medium px-1 flex-wrap gap-x-1">
         <span>Good</span>
+        <span>Satisfactory</span>
         <span>Moderate</span>
         <span>Poor</span>
-        <span>Unhealthy</span>
+        <span>Very Poor</span>
         <span>Severe</span>
-        <span>Hazardous</span>
       </div>
       <div className="flex w-full h-2 rounded-full overflow-hidden mt-1 shadow-inner">
         <div className="w-1/6 h-full" style={{ backgroundColor: scaleColors.good }}></div>
@@ -154,7 +134,7 @@ const AqiScaleBar = React.memo(function AqiScaleBar({ scaleColors, labelColor })
         <div className="w-1/6 h-full" style={{ backgroundColor: scaleColors.severe }}></div>
         <div className="w-1/6 h-full" style={{ backgroundColor: scaleColors.hazardous }}></div>
       </div>
-      <div className="flex justify-between text-xs font-medium px-1 mt-1">
+      <div className="flex justify-between text-[10px] md:text-xs font-medium px-1 mt-1 flex-wrap gap-x-1">
         <span>0</span>
         <span>50</span>
         <span>100</span>
@@ -167,28 +147,28 @@ const AqiScaleBar = React.memo(function AqiScaleBar({ scaleColors, labelColor })
 });
 
 
-export default function MainPredictionCard({ liveAqiData, predData, loading }) {
+export default function MainPredictionCard({ liveAqiData, predData, loadingPrediction, loadingLive }) {
   const { theme } = useContext(ThemeContext);
   const timeChipsRef = useRef(null);
-  
+
   // ... (useState and useEffects for selectedHourIndex are unchanged) ...
   const [selectedHourIndex, setSelectedHourIndex] = useState(() => {
     const saved = localStorage.getItem("selectedHourIndex");
     if (saved !== null) return Number(saved);
-  
+
     // Default = last predicted hour (not Live)
     if (predData && predData.predictions?.length > 0) {
       return predData.predictions.length - 1;
     }
-  
+
     return -1; // fallback to Live
   });
   useEffect(() => {
     const saved = localStorage.getItem("selectedHourIndex");
-  
+
     // If user already had a saved selected hour, don't override it
     if (saved !== null) return;
-  
+
     // Once predictions arrive, set default to last hour
     if (predData && predData.predictions?.length > 0) {
       const lastIndex = predData.predictions.length - 1;
@@ -196,42 +176,59 @@ export default function MainPredictionCard({ liveAqiData, predData, loading }) {
       localStorage.setItem("selectedHourIndex", lastIndex);
     }
   }, [predData]);
-  
-  
-    useLayoutEffect(() => {
-      if (timeChipsRef.current) {
-        const activeChip = timeChipsRef.current.querySelector(
-          `[data-time-index="${selectedHourIndex}"]`
-        );
-        if (activeChip) {
-          activeChip.scrollIntoView({
-            behavior: "instant",
-            block: "nearest",
-            inline: "center",
-          });
-        }
+
+
+  useLayoutEffect(() => {
+    if (timeChipsRef.current) {
+      const activeChip = timeChipsRef.current.querySelector(
+        `[data-time-index="${selectedHourIndex}"]`
+      );
+      if (activeChip) {
+        activeChip.scrollIntoView({
+          behavior: "instant",
+          block: "nearest",
+          inline: "center",
+        });
       }
-    }, []);
-  
-    useEffect(() => {
-      if (timeChipsRef.current) {
-        const activeChip = timeChipsRef.current.querySelector(
-          `[data-time-index="${selectedHourIndex}"]`
-        );
-        if (activeChip) {
-          activeChip.scrollIntoView({
-            behavior: "smooth",
-            block: "nearest",
-            inline: "center",
-          });
-        }
+    }
+  }, []);
+
+  useEffect(() => {
+    if (timeChipsRef.current) {
+      const activeChip = timeChipsRef.current.querySelector(
+        `[data-time-index="${selectedHourIndex}"]`
+      );
+      if (activeChip) {
+        activeChip.scrollIntoView({
+          behavior: "smooth",
+          block: "nearest",
+          inline: "center",
+        });
       }
-    }, [selectedHourIndex, loading]);
+    }
+  }, [selectedHourIndex, loadingPrediction, loadingLive]);
 
 
   // <-- 3. DETERMINE LOADING STATE *BEFORE* useMemo
-  // This state is true if the parent is loading OR if we have no data at all yet
-  const isLoading = loading || (!liveAqiData && !predData);
+  // A skeleton should ONLY render if the specific view we need is missing AND loading.
+
+  const isLiveMode = (selectedHourIndex === -1);
+  const isViewingMissingLive = isLiveMode && (!liveAqiData && loadingLive);
+  const isViewingMissingPred = !isLiveMode && (!predData && loadingPrediction);
+  const isCompletelyEmpty = (!liveAqiData && !predData) && (loadingLive || loadingPrediction);
+
+  const isLoading = isViewingMissingLive || isViewingMissingPred || isCompletelyEmpty;
+  const showSkeleton = isLoading;
+
+  console.log("MainPredictionCard Render Check:", {
+    showSkeleton,
+    isLiveMode,
+    loadingPrediction,
+    loadingLive,
+    hasLiveAqiData: !!liveAqiData,
+    hasPredData: !!predData,
+    rawPredData: predData
+  });
 
   // ... inside MainPredictionCard function ...
 
@@ -245,7 +242,7 @@ export default function MainPredictionCard({ liveAqiData, predData, loading }) {
     date,
     day,
   } = useMemo(() => {
-    if (isLoading) { 
+    if (isLoading) {
       return {
         aqi: "...", category: "Loading...", pm25: "...",
         lower_95: "...", upper_95: "...", time: "...",
@@ -256,9 +253,11 @@ export default function MainPredictionCard({ liveAqiData, predData, loading }) {
     // 1. Live AQI Mode (Index -1)
     if (selectedHourIndex === -1 && liveAqiData) {
       const livePm25 = liveAqiData.pm25;
-      const liveAqi = pm25ToAQI(livePm25);
+      // Use backend-provided AQI if available; fallback to local CPCB conversion
+      const liveAqi = liveAqiData.aqi != null ? liveAqiData.aqi : pm25ToAQI(livePm25);
       const liveDate = new Date(liveAqiData.datetime);
-      
+      console.debug(`[MainPredCard] Live: PM2.5=${livePm25}, backend AQI=${liveAqiData.aqi}, displayed AQI=${liveAqi}`);
+
       // Safety: Ensure livePm25 is a number
       const validLive = typeof livePm25 === 'number' && !isNaN(livePm25);
 
@@ -266,8 +265,8 @@ export default function MainPredictionCard({ liveAqiData, predData, loading }) {
         aqi: liveAqi,
         category: getAQICategory(liveAqi),
         pm25: validLive ? livePm25.toFixed(1) : "--",
-        lower_95: validLive ? (liveAqi * 0.8).toFixed(1) : "--",
-        upper_95: validLive ? (liveAqi * 1.2).toFixed(1) : "--",
+        lower_95: validLive ? (livePm25 * 0.8).toFixed(1) : "--",
+        upper_95: validLive ? (livePm25 * 1.2).toFixed(1) : "--",
         time: liveDate.toLocaleTimeString("en-US", {
           hour: "numeric", minute: "2-digit", hour12: false,
         }),
@@ -301,7 +300,7 @@ export default function MainPredictionCard({ liveAqiData, predData, loading }) {
     }
 
     const pm = prediction.pm25;
-    
+
     // 🔥 VITAL FIX: Check for null/NaN before using toFixed()
     const isValid = typeof pm === 'number' && !isNaN(pm);
     const calculatedAqi = isValid ? pm25ToAQI(pm) : 0;
@@ -311,11 +310,11 @@ export default function MainPredictionCard({ liveAqiData, predData, loading }) {
       aqi: isValid ? calculatedAqi : "N/A",
       category: isValid ? getAQICategory(calculatedAqi) : "Unavailable",
       pm25: isValid ? pm.toFixed(1) : "--", // Prevents crash on null
-      
+
       // Check confidence intervals too
       lower_95: (typeof prediction.lower_95 === 'number') ? prediction.lower_95.toFixed(1) : "--",
       upper_95: (typeof prediction.upper_95 === 'number') ? prediction.upper_95.toFixed(1) : "--",
-      
+
       time: predDate.toLocaleTimeString("en-US", {
         hour: "numeric", minute: "2-digit", hour12: false
       }),
@@ -355,22 +354,22 @@ export default function MainPredictionCard({ liveAqiData, predData, loading }) {
 
 
   // <-- 5. RENDER THE SKELETON IF LOADING
-  if (isLoading) {
+  if (showSkeleton) {
     return <MainPredictionCardSkeleton />;
   }
 
   // ... (The rest of your return() JSX is unchanged, except for the scale bar)
   return (
-    <section className="max-w-[1200px] mx-auto px-4 md:px-6 -mt-33 relative z-30">
+    <section className="w-full max-w-7xl mx-auto px-4 md:px-6 -mt-33 relative z-30 mb-8">
       <div
         // 🔥 FIX 2: Replaced hardcoded borders with your CSS variable
-        className="rounded-3xl p-6 md:p-8 shadow-xl border bg-[var(--card)] border-[var(--card-border)] transition-all duration-300 overflow-hidden"
+        className="rounded-2xl p-4 md:p-6 lg:p-8 shadow-xl border bg-[var(--card)] border-[var(--card-border)] transition-all duration-300 overflow-hidden w-full"
         style={{ background: colorStyles.background }}
       >
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-start h-full">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 lg:gap-6 items-start h-full">
 
           {/* COLUMN 1 */}
-          <div className="flex flex-col space-y-4" style={{ color: colorStyles.aqiScaleLabelsColor }}>
+          <div className="flex flex-col space-y-4 w-full" style={{ color: colorStyles.aqiScaleLabelsColor }}>
             {/* ... (Live AQI, value, category, confidence range are all unchanged) ... */}
             <div className="flex items-baseline gap-2">
               {selectedHourIndex === -1 && liveAqiData && (
@@ -383,7 +382,7 @@ export default function MainPredictionCard({ liveAqiData, predData, loading }) {
 
             <div className="flex items-center justify-center gap-4">
               <div
-                className="text-7xl lg:text-8xl font-extrabold"
+                className="text-6xl md:text-7xl lg:text-8xl font-extrabold"
                 style={{
                   color: colorStyles.aqiValueColor,
                   textShadow: "0 2px 4px rgba(0,0,0,0.1)",
@@ -421,7 +420,7 @@ export default function MainPredictionCard({ liveAqiData, predData, loading }) {
 
             {/* <-- 6. REPLACE THE OLD SCALE BAR... */}
             {/* <div className="mt-6"> ... </div> */}
-            
+
             {/* ...WITH THE NEW MEMOIZED COMPONENT */}
             <AqiScaleBar
               scaleColors={colorStyles.scaleColors}
@@ -431,9 +430,9 @@ export default function MainPredictionCard({ liveAqiData, predData, loading }) {
 
           {/* COLUMN 2 */}
           {/* ... (This is unchanged) ... */}
-          <div className="flex items-end justify-center relative min-h-[200px] md:min-h-[300px]">
+          <div className="flex items-end justify-center w-full min-h-[160px] md:min-h-[200px] lg:min-h-[300px] mt-6 lg:mt-0">
             <div
-              className="absolute bottom-0 h-[350px] w-[250px] bg-no-repeat bg-bottom bg-contain"
+              className="h-[160px] md:h-[220px] lg:h-[350px] w-[160px] md:w-[220px] lg:w-[250px] mx-auto bg-no-repeat bg-bottom bg-contain"
               style={{
                 backgroundImage: `url('${MaskMan}')`,
               }}
@@ -442,22 +441,22 @@ export default function MainPredictionCard({ liveAqiData, predData, loading }) {
 
           {/* COLUMN 3 */}
           {/* ... (This is unchanged) ... */}
-          <div className="flex flex-col justify-center items-center h-full">
+          <div className="flex flex-col justify-center items-center h-full pt-6 lg:pt-0 w-full">
             <div className="flex flex-col items-center text-center">
-              <p className="text-4xl font-semibold" style={{ color: colorStyles.timeDateColor, opacity: 0.9 }}>
+              <p className="text-3xl md:text-4xl font-semibold" style={{ color: colorStyles.timeDateColor, opacity: 0.9 }}>
                 {day}
               </p>
-              <p className="text-5xl font-bold" style={{ color: colorStyles.aqiScaleLabelsColor, opacity: 0.9 }}>
+              <p className="text-4xl md:text-5xl font-bold" style={{ color: colorStyles.aqiScaleLabelsColor, opacity: 0.9 }}>
                 {date}
               </p>
             </div>
 
-            <div className="mt-4">
-              <div className="flex items-center justify-center space-x-1">
+            <div className="mt-4 w-full">
+              <div className="flex items-center justify-center space-x-1 w-full max-w-[100vw]">
                 <button
                   onClick={() => handleTimeChange("prev")}
-                  disabled={loading}
-                  className="cursor-pointer p-2 rounded-full hover:bg-black/10 dark:hover:bg-white/10 transition-colors"
+                  disabled={loadingPrediction || loadingLive}
+                  className="cursor-pointer p-2 rounded-full bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 transition-colors"
                   style={{ color: colorStyles.accentColor }}
                 >
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -467,8 +466,7 @@ export default function MainPredictionCard({ liveAqiData, predData, loading }) {
 
                 <div
                   ref={timeChipsRef}
-                  className="flex space-x-2 overflow-x-hidden pb-2"
-                  style={{ width: "100%", maxWidth: "280px" }}
+                  className="flex space-x-2 overflow-x-hidden pb-2 w-full max-w-[280px]"
                 >
                   {liveAqiData && (
                     <button
@@ -515,8 +513,8 @@ export default function MainPredictionCard({ liveAqiData, predData, loading }) {
 
                 <button
                   onClick={() => handleTimeChange("next")}
-                  disabled={loading}
-                  className="cursor-pointer p-2 rounded-full hover:bg-black/10 dark:hover:bg-white/10 transition-colors"
+                  disabled={loadingPrediction || loadingLive}
+                  className="cursor-pointer p-2 rounded-full bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 transition-colors"
                   style={{ color: colorStyles.accentColor }}
                 >
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

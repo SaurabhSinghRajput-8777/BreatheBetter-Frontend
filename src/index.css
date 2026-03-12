@@ -1,12 +1,17 @@
 @import "tailwindcss";
 
-/* GLOBAL LIGHT + DARK BACKGROUND FIX  */
+/* ─── Tailwind v4: class-based dark mode ────────────────────────── */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* ─── Theme-aware CSS variables ─────────────────────────────────── */
 :root {
-  --bg: #F5F7FA;
+  --bg: #faf8f2;
   --card: #ffffff;
   --text-primary: #1f2937;
   --text-secondary: #6b7280;
-  --card-border: #E5E7EB; /* This is tailwind gray-200 */
+  --card-border: #E5E7EB;
+  --tile: rgba(34, 197, 94, 0.15);
+  color-scheme: light;
 }
 
 .dark {
@@ -14,26 +19,60 @@
   --card: #111827;
   --text-primary: #f3f4f6;
   --text-secondary: #9ca3af;
-  --card-border: #374151; /* This is tailwind gray-700 */
+  --card-border: #374151;
+  --tile: rgba(34, 197, 94, 0.08);
+  color-scheme: dark;
 }
 
+/* ─── Base theme overrides ────────────────────────────────── */
 body {
-  @apply bg-[--bg] transition-colors;
+  background: var(--bg);
+  color: var(--text-primary);
+  transition: background 0.3s ease, color 0.3s ease;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.dark body {
+  background: #020617;
+}
+
+/* ─── Utility: text colors via CSS vars for non-Tailwind components ── */
+.text-primary {
   color: var(--text-primary);
 }
 
-html, body, #root {
-  height: 100%;
+.text-secondary {
+  color: var(--text-secondary);
 }
 
-/* SCROLLBAR (OPTIONAL CLEAN STYLE) */
+/* ─── Standardized Component Layouts ────────────────────────────── */
+@layer components {
+  .card-layout {
+    @apply rounded-2xl border p-6 shadow-sm transition-all duration-300 backdrop-blur-md overflow-hidden;
+    background-color: var(--card);
+    border-color: var(--card-border);
+  }
+
+  .btn-layout {
+    @apply inline-flex items-center justify-center px-4 py-2.5 rounded-xl text-sm font-semibold transition-all duration-300 active:scale-95 cursor-pointer shadow-sm hover:shadow-md;
+  }
+}
+
+/* ─── Scrollbar ─────────────────────────────────────────────────── */
 ::-webkit-scrollbar {
   width: 8px;
 }
+
 ::-webkit-scrollbar-thumb {
   background: #d1d5db;
   border-radius: 4px;
 }
+
+.dark ::-webkit-scrollbar-thumb {
+  background: #374151;
+}
+
 ::-webkit-scrollbar-thumb:hover {
   background: #9ca3af;
 }
