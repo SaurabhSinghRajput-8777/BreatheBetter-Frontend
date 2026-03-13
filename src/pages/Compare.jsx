@@ -678,6 +678,14 @@ function CityComparison({ cityA, setCityA, cityB, setCityB, days, setDays, theme
 // ═══════════════════════════════════════════════════════════════════════
 // HELPERS
 // ═══════════════════════════════════════════════════════════════════════
+
+/**
+ * Utility to calculate average of a numeric array.
+ * @param {number[]} arr
+ * @returns {number}
+ */
+const getAvg = (arr) => arr.length > 0 ? arr.reduce((acc, val) => acc + val, 0) / arr.length : 0;
+
 function CitySelect({ value, onChange, color }) {
   return (
     <div className="relative group">
